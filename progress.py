@@ -27,7 +27,7 @@ def get_terminal_size():
         # and it's that simple on linux...
         return os.popen('stty size', 'r').read().split()
 
-def print_progress(position, target, clear=False):
+def print_progress(position, target, clear=False, barChar='=', leadingChar='>', maxWidth=0):
     """ 
     Print a bar the width of the terminal, filled according to position/target
     Args:
@@ -35,11 +35,14 @@ def print_progress(position, target, clear=False):
         The current "step" your process is at, i.e. bytes copied
       target (int):
         The goal your process is trying to reach, i.e. total amount of bytes
+      maxWidth (int):
+        If not supplied, size of terminal is used.
     """
-    # [=====    30       ]
     import math
     import platform
     rows, columns = get_terminal_size()
+    if maxWidth != 0:
+        columns = maxWidth
     
     currentOS = platform.system()
     # account for [] at the edges
@@ -53,9 +56,11 @@ def print_progress(position, target, clear=False):
     stepPercentage = ( 100 / maximumBarLength )
     numBars = math.floor( percentage / stepPercentage )
     # create string filled with '====' at the beginning and '    ' at the back
-    barstring = ''.join('=' for i in range( numBars )) + ''.join(' ' for i in range( maximumBarLength - numBars ))
-    
-    half = round(maximumBarLength/2)
+    if numBars > 0:
+        barstring = ''.join( barChar for i in range( numBars-1 )) + leadingChar + ''.join(' ' for i in range( maximumBarLength - numBars ))
+    else: 
+        barstring = ''.join(' ' for i in range( maximumBarLength ))
+    half = round( maximumBarLength /2 )
     digitValue = ' {:3.2f}% '.format( round( percentage, 4 )).zfill( 5 )
 
     # no jiggly positioning
@@ -85,13 +90,7 @@ def get_file_size(filepath):
 def get_folder_size(folderPath):
     """ Returns the size of files in a folder including any subdirectories """
     import os
-    size = 0
-    for file in os.listdir( folderPath ):
-        if os.path.isfile( folderPath + file ):
-            size += get_file_size( os.path.join( folderPath, file ))
-        else:
-            size += get_folder_size( os.path.join( folderPath, file, '' ))
-    return size
+    return sum( os.path.getsize(os.path.join(dirpath,filename)) for dirpath, dirnames, filenames in os.walk( folderPath ) for filename in filenames )
 
 def copy_file_with_progress(src, dst, length=16*1024):
     """ Copies a single file from src to dst (paths) and prints the progress"""
@@ -110,19 +109,32 @@ def copy_file_with_progress(src, dst, length=16*1024):
 def copy_folder_with_progress(srcFolder, destFolder):
     """ Copy a folder with all its subdirectories and files and show the progress """
     #TODO: count bytez instead of files
+    # TODO: 2 seperate bars, one for file, one for total
     import os
     import shutil
     copied = 0
     files = os.listdir( srcFolder )
     total = get_folder_size( srcFolder )
-    for file in files:
-        if os.path.isfile( os.path.join( srcFolder, file )):
-            copied += get_file_size( os.path.join( srcFolder, file ))
-            shutil.copy(os.path.join( srcFolder, file ), os.path.join( destFolder, file ))
-        else:
-            copied += get_folder_size( os.path.join( srcFolder, file, '' ))
-            shutil.copytree( os.path.join( srcFolder, file, '', os.path.join( destFolder, file, '')))
-        print_progress( copied, total )
+    for dirpath, dirnames, filenames in os.walk(srcFolder):
+        print(dirpath, dirnames, filenames)
+    # for file in files:
+    #     if os.path.isfile( os.path.join( srcFolder, file )):
+    #         copied += get_file_size( os.path.join( srcFolder, file ))
+    #         shutil.copy(os.path.join( srcFolder, file ), os.path.join( destFolder, file ))
+    #     else:
+    #         copied += get_folder_size( os.path.join( srcFolder, file, '' ))
+    #         shutil.copytree( os.path.join( srcFolder, file, '', os.path.join( destFolder, file, '')))
+    #     print_progress( copied, total )
+
+def handle_args( args ):
+    default_args = {
+        'percent': 0,
+        'position': 0,
+        'target': 0,
+        'demo': False,
+
+        
+    }
 
 def main():
     helpStr = """Usage: progress [ percentage | { position target } | --demo ]"""
@@ -131,18 +143,25 @@ def main():
     argLen = len(sys.argv)
     #sys.exit(0)
     if argLen == 2:
-        print_progress_percent(int(sys.argv[1]))
+        if sys.argv[1] == '--demo':
+            print('Default print:')
+            for i in range(1, 250):
+                print_progress(i, 249)
+            print('Custom chars:')
+            for i in range(1, 250):
+                print_progress(i, 249, barChar='X', leadingChar='$')
+            print('Fixed width:')
+            for i in range(1, 250):
+                print_progress(i, 249, maxWidth='40')
+        else:
+            print_progress_percent(int(sys.argv[1]))
     elif argLen == 3:
         print_progress(int(sys.argv[1]), int(sys.argv[2]))
       #elif argLen == 4:
       #  print_progress(int(sys.argv[2]), int(sys.argv[3]))
     else:
-      print(helpStr)
+      #print(helpStr)
+      copy_folder_with_progress('/home/panki/test/', '')
+
 if __name__ == '__main__':
-    import sys
-    if sys.argv[1] == '--demo':
-        print('Copying file...')
-        for i in range(1, 500):
-            print_progress(i, 499)
-    else:
-        main()
+    main()
