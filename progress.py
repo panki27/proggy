@@ -90,12 +90,12 @@ def get_file_size(filepath):
 def get_folder_size(folderPath):
     """ Returns the size of files in a folder including any subdirectories """
     import os
-    return sum( os.path.getsize(os.path.join(dirpath,filename)) for dirpath, dirnames, filenames in os.walk( folderPath ) for filename in filenames )
+    return sum( os.stat(os.path.join(dirpath,filename)).st_size for dirpath, dirnames, filenames in os.walk( folderPath ) for filename in filenames )
 
-def copy_file_with_progress(src, dst, length=16*1024):
+def copy_file_with_progress(src, dst, totalsize=0, copied=0, callback=print_progress, length=16*1024):
     """ Copies a single file from src to dst (paths) and prints the progress"""
-    copied = 0
-    totalsize = get_file_size(src)
+    if not totalsize:
+        totalsize = get_file_size(src)
     with open(src, 'rb') as fsrc:
       with open(dst, 'wb') as fdst:
         while True:
@@ -104,20 +104,31 @@ def copy_file_with_progress(src, dst, length=16*1024):
                 break
             fdst.write(buf)
             copied += len(buf)
-            print_progress(copied, totalsize)
+            callback(copied, totalsize)
 
-def copy_folder_with_progress(srcFolder, destFolder):
-    """ Copy a folder with all its subdirectories and files and show the progress """
-    #TODO: count bytez instead of files
+    #print('file ' + src + ', ' + str(copied) + " out of total " + str(totalsize)  )
+    return copied
+
+def copy_folder_with_progress(srcFolder, destFolder, copied=0, total=0):
+    """ Copy a folder with all its subdirectories and files and show the progress 
+    Will create a new folder at the target.
+    Call with trailing / if destination folder already exists
+    """
     # TODO: 2 seperate bars, one for file, one for total
     import os
     import shutil
-    copied = 0
     files = os.listdir( srcFolder )
-    total = get_folder_size( srcFolder )
-    for dirpath, dirnames, filenames in os.walk(srcFolder):
-        print(dirpath, dirnames, filenames)
-    # for file in files:
+    if not total:
+        total = get_folder_size( srcFolder )
+    #print("Copying folder " + srcFolder + " to "+ destFolder+  ", total size " + str(total) + " bytes")
+    if not os.path.exists(destFolder):
+        os.mkdir(destFolder)
+    for item in os.listdir(srcFolder):
+        if os.path.isfile(os.path.join(srcFolder, item)):
+            copied = copy_file_with_progress(os.path.join(srcFolder, item), os.path.join(destFolder, item), totalsize=total, copied=copied)
+        else:
+            copied = copy_folder_with_progress(os.path.join(srcFolder, item), os.path.join(destFolder, item), total=total, copied=copied);
+    
     #     if os.path.isfile( os.path.join( srcFolder, file )):
     #         copied += get_file_size( os.path.join( srcFolder, file ))
     #         shutil.copy(os.path.join( srcFolder, file ), os.path.join( destFolder, file ))
@@ -125,6 +136,7 @@ def copy_folder_with_progress(srcFolder, destFolder):
     #         copied += get_folder_size( os.path.join( srcFolder, file, '' ))
     #         shutil.copytree( os.path.join( srcFolder, file, '', os.path.join( destFolder, file, '')))
     #     print_progress( copied, total )
+    return copied
 
 def handle_args( args ):
     default_args = {
@@ -160,8 +172,8 @@ def main():
       #elif argLen == 4:
       #  print_progress(int(sys.argv[2]), int(sys.argv[3]))
     else:
-      #print(helpStr)
-      copy_folder_with_progress('/home/panki/test/', '')
+      print(helpStr)
+      #copy_folder_with_progress('C:\\Users\\Panki\\Desktop\\Privat\\Games\\Emu\\N64_roms\\', 'C:\\Users\\Panki\\Desktop\\copied-roms\\') #('/mnt/c/Users/Panki/Desktop/Privat/Games/Emu/N64_roms/', '/mnt/c/Users/Panki/Desktop/roms-copied')
 
 if __name__ == '__main__':
     main()
